@@ -1,0 +1,1617 @@
+<!doctype html>
+<!--
+  Hex Map Generator / Hexkarten-Generator
+  Copyright 2026 Talluron and contributors
+  SPDX-License-Identifier: Apache-2.0
+
+  Modified versions must keep attribution notices and mark changed files as
+  described by the Apache License, Version 2.0.
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hexkarten-Generator v0.12.1</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;background:#eee}
+*{box-sizing:border-box}
+body{margin:0}
+header{padding:12px 16px;background:#1b1b1b;color:#fff;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+.header-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.language{display:flex;gap:6px;align-items:center;color:#ccc}
+.language select{border:1px solid #666;background:#2b2b2b;color:#fff;border-radius:6px;padding:5px 8px}
+main{display:grid;grid-template-columns:350px 1fr;min-height:calc(100vh - 50px)}
+aside{background:#fff;border-right:1px solid #ccc;padding:14px;overflow:auto}
+section.preview{padding:14px;overflow:auto}
+.ctrl{margin:0 0 10px;min-width:0}
+.ctrl label{display:flex;justify-content:space-between;font-size:13px;font-weight:600;gap:8px}
+.ctrl input[type=range]{width:100%}
+.slider-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.top-actions{position:sticky;top:0;z-index:5;background:#fff;padding:4px 0 8px;border-bottom:1px solid #ddd;margin-bottom:10px}
+.top-actions .row{margin:5px 0}
+.top-actions button{flex:1}
+@media (max-width:520px){.slider-grid{grid-template-columns:1fr}}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0}
+.row input[type=text]{flex:1;min-width:0}
+button{border:1px solid #777;background:#f7f7f7;padding:8px 10px;border-radius:6px;cursor:pointer}
+button.primary{background:#222;color:#fff;border-color:#222}
+button:hover{filter:brightness(.96)}
+button:disabled{opacity:.55;cursor:wait}
+.small{font-size:12px;color:#555;line-height:1.35}
+.info{font-size:12px;line-height:1.45;background:#f4f4f4;border-radius:6px;padding:8px;margin-top:8px}
+canvas{background:#fff;box-shadow:0 2px 12px #0002;max-width:100%;height:auto}
+fieldset{border:1px solid #ccc;border-radius:8px;margin:12px 0;padding:10px}
+legend{font-weight:700;font-size:13px}
+.value{font-variant-numeric:tabular-nums}
+.num{width:66px}
+.progress{display:none;font-size:12px;margin-top:8px}
+@media (max-width:850px){main{grid-template-columns:1fr} aside{border-right:0;border-bottom:1px solid #ccc}}
+</style>
+</head>
+<body>
+<header><h1 id="appTitle">Hexkarten-Generator</h1><div class="header-meta"><div class="small" id="appSubtitle" style="color:#ccc">29,5 mm Schlüsselweite · 34,4 mm Spitzenweite · A4-PDF · Biome</div><label class="small language"><span id="languageLabel">Sprache</span><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></label></div></header>
+<main>
+<aside>
+  <div class="top-actions">
+    <div class="row">
+      <button class="primary" id="generate">Karte erzeugen</button>
+      <button id="pdf">A4-PDF speichern</button>
+    </div>
+    <div class="row">
+      <button id="savePng">Gesamtkarte als PNG</button>
+      <button id="copySeed">Seed kopieren</button>
+    </div>
+    <div class="row">
+      <button id="copyUrl">Karten-URL kopieren</button>
+    </div>
+  </div>
+  <fieldset>
+    <legend>Karte</legend>
+    <div class="row"><label style="width:72px">Seed</label><input id="seed" type="text" value="WOLFSBAU-001"><button id="newSeed">Neu</button></div>
+    <div class="info">
+      <b>Vollständiger Karten-Code</b><br><span id="fullSeed" style="word-break:break-all">–</span><br><br>
+      <b>Direktlink</b><br><a id="shareLink" href="#" target="_blank" rel="noopener" style="word-break:break-all">–</a>
+    </div>
+    <div class="row"><label style="width:72px">Breite</label><input id="cols" class="num" type="number" min="8" max="40" value="18">
+    <label>Höhe</label><input id="rows" class="num" type="number" min="8" max="50" value="24"></div>
+    <div class="info"><b>Hexgröße im Ausdruck:</b><br>Schlüsselweite 29,5 mm<br>Spitzenweite 34,4 mm</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Gelände-Mix</legend>
+    <div class="row"><label style="width:110px">Biom</label>
+      <select id="biome" style="flex:1;padding:6px">
+        <option value="forest" selected>Wald</option>
+        <option value="ice">Eis</option>
+        <option value="volcano">Vulkan</option>
+        <option value="moon">Mond</option>
+        <option value="coast">Küste</option>
+      </select>
+    </div>
+    <div class="slider-grid">
+    <div class="ctrl"><label>Stadtanteil <span class="value" id="vUrban">45</span></label><input id="urban" type="range" min="1" max="100" value="45"></div>
+    <div class="ctrl"><label>Bergig <span class="value" id="vHills">35</span></label><input id="hills" type="range" min="1" max="100" value="35"></div>
+    <div class="ctrl"><label title="Bestimmt die Form der Höhenzüge: niedrig = eher gestufte, ausgedehnte Berge; hoch = breitere Plateaus mit kompakteren Gipfeln.">Berg-Plateaus <span class="value" id="vPlateau">65</span></label><input id="plateau" type="range" min="1" max="100" value="65"></div>
+    <div class="ctrl"><label>Bewaldung <span class="value" id="vForest">25</span></label><input id="forest" type="range" min="1" max="100" value="25"></div>
+    <div class="ctrl"><label>Walddichte <span class="value" id="vForestDensity">45</span></label><input id="forestDensity" type="range" min="1" max="100" value="45"></div>
+    <div class="ctrl"><label>Rough-Gelände <span class="value" id="vRough">20</span></label><input id="rough" type="range" min="1" max="100" value="20"></div>
+    <div class="ctrl"><label>Straßen <span class="value" id="vRoads">45</span></label><input id="roads" type="range" min="1" max="100" value="45"></div>
+    <div class="ctrl"><label>Gebäudehärte <span class="value" id="vHard">55</span></label><input id="hard" type="range" min="1" max="100" value="55"></div>
+    <div class="ctrl"><label>Gebäudehöhe <span class="value" id="vBuildingHeight">35</span></label><input id="buildingHeight" type="range" min="1" max="100" value="35"></div>
+    <div class="ctrl"><label>Gewässer-Anteil <span class="value" id="vWater">12</span></label><input id="water" type="range" min="1" max="100" value="12"></div>
+    <div class="ctrl"><label>Gewässer-Tiefe <span class="value" id="vDepth">40</span></label><input id="depth" type="range" min="1" max="100" value="40"></div>
+    <div class="ctrl"><label>Flusslauf <span class="value" id="vRiver">1</span></label><input id="river" type="range" min="1" max="100" value="1"></div>
+      </div>
+</fieldset>
+
+  <fieldset>
+    <legend>A4-PDF</legend>
+    <div class="row"><label style="width:110px">Seitenrand</label><input id="pageMargin" class="num" type="number" min="0" max="20" step="1" value="8"><span>mm</span></div>
+    <div class="row"><label style="width:110px">Überlappung</label><input id="overlap" class="num" type="number" min="0" max="20" step="1" value="5"><span>mm</span></div>
+    <label class="row"><input id="pageGuides" type="checkbox" checked> A4-Aufteilung in Vorschau zeigen</label>
+    <div class="info" id="pageInfo">–</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Darstellung</legend>
+    <label class="row"><input id="bw" type="checkbox" checked> Schwarzweiß-Druckmodus</label>
+    <div class="ctrl"><label>Hexlinien-Dicke <span class="value" id="vGridWidth">35</span></label><input id="gridWidth" type="range" min="1" max="100" value="35"></div>
+    <label class="row"><input id="coords" type="checkbox"> Hex-Koordinaten anzeigen</label>
+    <label class="row"><input id="hexNumbers" type="checkbox"> Hexfelder ab 1000 durchnummerieren</label>
+    <div class="ctrl"><label>Nummern-Schriftgröße <span class="value" id="vNumberFont">35</span></label><input id="numberFont" type="range" min="1" max="100" value="35"></div>
+    <label class="row"><input id="grid" type="checkbox" checked> Hexraster anzeigen</label>
+    <label class="row"><input id="levelEveryHex" type="checkbox" checked> Höhenlevel in jedem Höhen-Hex anzeigen</label>
+    <label class="row"><input id="hillShading" type="checkbox" checked> Höhenlevel abgestuft schattieren</label>
+    <label class="row"><input id="slopeHatching" type="checkbox" checked> Böschungsschraffur an Höhenkanten</label>
+
+  </fieldset>
+
+
+  <div class="progress" id="progress">PDF wird erzeugt …</div>
+  <div class="info" id="errorBox" style="display:none;background:#fff0f0;border:1px solid #c66"></div>
+  <p class="small">Die Bildschirmansicht zeigt immer die vollständige Karte. Erst beim PDF-Export wird sie auf A4-Seiten aufgeteilt. Gleicher Seed + gleiche Einstellungen ergeben dieselbe Karte.</p>
+</aside>
+
+<section class="preview">
+  <canvas id="map"></canvas>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const HEX_FLAT=29.5;   // mm, Schlüsselweite
+const HEX_POINT=34.4;  // mm, Spitzenweite
+const ROW_STEP=HEX_POINT*0.75;
+const A4_W=210, A4_H=297;
+let currentModel=null;
+
+const I18N={
+  de:{
+    htmlLang:"de",
+    title:"Hexkarten-Generator v0.12.1",
+    appTitle:"Hexkarten-Generator",
+    appSubtitle:"29,5 mm Schlüsselweite · 34,4 mm Spitzenweite · A4-PDF · Biome",
+    languageLabel:"Sprache",
+    generate:"Karte erzeugen",
+    pdf:"A4-PDF speichern",
+    savePng:"Gesamtkarte als PNG",
+    copySeed:"Seed kopieren",
+    copyUrl:"Karten-URL kopieren",
+    newSeed:"Neu",
+    mapLegend:"Karte",
+    fullCode:"Vollständiger Karten-Code",
+    directLink:"Direktlink",
+    width:"Breite",
+    height:"Höhe",
+    printHexSize:"Hexgröße im Ausdruck:",
+    flatWidth:"Schlüsselweite 29,5 mm",
+    pointWidth:"Spitzenweite 34,4 mm",
+    terrainMix:"Gelände-Mix",
+    biome:"Biom",
+    forestBiome:"Wald",
+    iceBiome:"Eis",
+    volcanoBiome:"Vulkan",
+    moonBiome:"Mond",
+    coastBiome:"Küste",
+    urban:"Stadtanteil",
+    hills:"Bergig",
+    plateau:"Berg-Plateaus",
+    plateauTitle:"Bestimmt die Form der Höhenzüge: niedrig = eher gestufte, ausgedehnte Berge; hoch = breitere Plateaus mit kompakteren Gipfeln.",
+    forest:"Bewaldung",
+    forestDensity:"Walddichte",
+    rough:"Rough-Gelände",
+    roads:"Straßen",
+    hard:"Gebäudehärte",
+    buildingHeight:"Gebäudehöhe",
+    water:"Gewässer-Anteil",
+    depth:"Gewässer-Tiefe",
+    river:"Flusslauf",
+    pageMargin:"Seitenrand",
+    overlap:"Überlappung",
+    pageGuides:"A4-Aufteilung in Vorschau zeigen",
+    display:"Darstellung",
+    bw:"Schwarzweiß-Druckmodus",
+    gridWidth:"Hexlinien-Dicke",
+    coords:"Hex-Koordinaten anzeigen",
+    hexNumbers:"Hexfelder ab 1000 durchnummerieren",
+    numberFont:"Nummern-Schriftgröße",
+    grid:"Hexraster anzeigen",
+    levelEveryHex:"Höhenlevel in jedem Höhen-Hex anzeigen",
+    hillShading:"Höhenlevel abgestuft schattieren",
+    slopeHatching:"Böschungsschraffur an Höhenkanten",
+    footerNote:"Die Bildschirmansicht zeigt immer die vollständige Karte. Erst beim PDF-Export wird sie auf A4-Seiten aufgeteilt. Gleicher Seed + gleiche Einstellungen ergeben dieselbe Karte.",
+    progress:"PDF wird erzeugt …",
+    progressPage:(page,total)=>`PDF wird erzeugt … Seite ${page} von ${total}`,
+    errorPrefix:"Fehler bei der Kartenerzeugung: ",
+    pageInfo:(model,p)=>`Kartengröße: <b>${model.size.w.toFixed(1)} × ${model.size.h.toFixed(1)} mm</b><br>A4-Seiten: <b>${p.nx} × ${p.ny} = ${p.total}</b><br>Nutzfläche je Seite: ${p.uw.toFixed(0)} × ${p.uh.toFixed(0)} mm`,
+    page:"Seite",
+    mapFilePrefix:"hexkarte"
+  },
+  en:{
+    htmlLang:"en",
+    title:"Hex Map Generator v0.12.1",
+    appTitle:"Hex Map Generator",
+    appSubtitle:"29.5 mm flat-to-flat · 34.4 mm point-to-point · A4 PDF · Biomes",
+    languageLabel:"Language",
+    generate:"Generate map",
+    pdf:"Save A4 PDF",
+    savePng:"Full map as PNG",
+    copySeed:"Copy seed",
+    copyUrl:"Copy map URL",
+    newSeed:"New",
+    mapLegend:"Map",
+    fullCode:"Complete map code",
+    directLink:"Direct link",
+    width:"Width",
+    height:"Height",
+    printHexSize:"Printed hex size:",
+    flatWidth:"Flat-to-flat 29.5 mm",
+    pointWidth:"Point-to-point 34.4 mm",
+    terrainMix:"Terrain Mix",
+    biome:"Biome",
+    forestBiome:"Forest",
+    iceBiome:"Ice",
+    volcanoBiome:"Volcano",
+    moonBiome:"Moon",
+    coastBiome:"Coast",
+    urban:"Urban share",
+    hills:"Hills",
+    plateau:"Mountain plateaus",
+    plateauTitle:"Controls the shape of elevation ranges: low = more stepped, sprawling hills; high = broader plateaus with more compact peaks.",
+    forest:"Forest cover",
+    forestDensity:"Forest density",
+    rough:"Rough terrain",
+    roads:"Roads",
+    hard:"Building hardness",
+    buildingHeight:"Building height",
+    water:"Water share",
+    depth:"Water depth",
+    river:"River course",
+    pageMargin:"Page margin",
+    overlap:"Overlap",
+    pageGuides:"Show A4 page split in preview",
+    display:"Display",
+    bw:"Black-and-white print mode",
+    gridWidth:"Hex line thickness",
+    coords:"Show hex coordinates",
+    hexNumbers:"Number hexes from 1000",
+    numberFont:"Number font size",
+    grid:"Show hex grid",
+    levelEveryHex:"Show elevation level in every elevated hex",
+    hillShading:"Shade elevation levels",
+    slopeHatching:"Slope hatching on elevation edges",
+    footerNote:"The screen preview always shows the complete map. The map is split into A4 pages only during PDF export. Same seed + same settings produce the same map.",
+    progress:"Generating PDF …",
+    progressPage:(page,total)=>`Generating PDF … page ${page} of ${total}`,
+    errorPrefix:"Error while generating the map: ",
+    pageInfo:(model,p)=>`Map size: <b>${model.size.w.toFixed(1)} × ${model.size.h.toFixed(1)} mm</b><br>A4 pages: <b>${p.nx} × ${p.ny} = ${p.total}</b><br>Usable area per page: ${p.uw.toFixed(0)} × ${p.uh.toFixed(0)} mm`,
+    page:"Page",
+    mapFilePrefix:"hexmap"
+  }
+};
+let currentLang="de";
+function tr(key){return (I18N[currentLang]&&I18N[currentLang][key])||I18N.de[key]||key}
+function setText(selector,text){const el=document.querySelector(selector);if(el) el.textContent=text}
+function setHtml(selector,html){const el=document.querySelector(selector);if(el) el.innerHTML=html}
+function setCtrlLabel(id,label,title){
+  const input=$(id);
+  if(!input||!input.parentElement) return;
+  const labelEl=input.parentElement.querySelector("label");
+  const valueEl=$("v"+id[0].toUpperCase()+id.slice(1));
+  if(labelEl) labelEl.textContent=label+" ";
+  if(labelEl&&valueEl) labelEl.appendChild(valueEl);
+  if(labelEl){
+    if(title) labelEl.title=title;
+    else labelEl.removeAttribute("title");
+  }
+}
+function setCheckboxLabel(id,text){
+  const input=$(id);
+  if(!input||!input.parentElement) return;
+  input.parentElement.replaceChildren(input,document.createTextNode(" "+text));
+}
+function preferredLanguage(){
+  const params=new URLSearchParams(window.location.search);
+  const fromUrl=params.get("lang");
+  if(fromUrl==="de"||fromUrl==="en") return fromUrl;
+  try{
+    const stored=localStorage.getItem("hexmap-language");
+    if(stored==="de"||stored==="en") return stored;
+  }catch(e){}
+  return (navigator.language||"").toLowerCase().startsWith("en") ? "en" : "de";
+}
+function applyLanguage(lang){
+  currentLang=(lang==="en")?"en":"de";
+  document.documentElement.lang=tr("htmlLang");
+  document.title=tr("title");
+  const language=$("language");
+  if(language) language.value=currentLang;
+  setText("#appTitle",tr("appTitle"));
+  setText("#appSubtitle",tr("appSubtitle"));
+  setText("#languageLabel",tr("languageLabel"));
+  setText("#generate",tr("generate"));
+  setText("#pdf",tr("pdf"));
+  setText("#savePng",tr("savePng"));
+  setText("#copySeed",tr("copySeed"));
+  setText("#copyUrl",tr("copyUrl"));
+  setText("#newSeed",tr("newSeed"));
+  setText("fieldset:nth-of-type(1) legend",tr("mapLegend"));
+  const mapFieldset=document.querySelector("fieldset:nth-of-type(1)");
+  if(mapFieldset){
+    const infos=mapFieldset.querySelectorAll(".info");
+    if(infos[0]) infos[0].innerHTML=`<b>${tr("fullCode")}</b><br><span id="fullSeed" style="word-break:break-all">–</span><br><br><b>${tr("directLink")}</b><br><a id="shareLink" href="#" target="_blank" rel="noopener" style="word-break:break-all">–</a>`;
+    if(infos[1]) infos[1].innerHTML=`<b>${tr("printHexSize")}</b><br>${tr("flatWidth")}<br>${tr("pointWidth")}`;
+    const rows=mapFieldset.querySelectorAll(".row");
+    const seedLabel=rows[0]&&rows[0].querySelector("label");
+    if(seedLabel) seedLabel.textContent="Seed";
+    const labels=rows[1]?rows[1].querySelectorAll("label"):[];
+    if(labels[0]) labels[0].textContent=tr("width");
+    if(labels[1]) labels[1].textContent=tr("height");
+  }
+  setText("fieldset:nth-of-type(2) legend",tr("terrainMix"));
+  const biomeLabel=document.querySelector("fieldset:nth-of-type(2) .row label");
+  if(biomeLabel) biomeLabel.textContent=tr("biome");
+  const biome=$("biome");
+  if(biome){
+    const names={forest:"forestBiome",ice:"iceBiome",volcano:"volcanoBiome",moon:"moonBiome",coast:"coastBiome"};
+    for(const option of biome.options) option.textContent=tr(names[option.value]||option.value);
+  }
+  setCtrlLabel("urban",tr("urban"));
+  setCtrlLabel("hills",tr("hills"));
+  setCtrlLabel("plateau",tr("plateau"),tr("plateauTitle"));
+  setCtrlLabel("forest",tr("forest"));
+  setCtrlLabel("forestDensity",tr("forestDensity"));
+  setCtrlLabel("rough",tr("rough"));
+  setCtrlLabel("roads",tr("roads"));
+  setCtrlLabel("hard",tr("hard"));
+  setCtrlLabel("buildingHeight",tr("buildingHeight"));
+  setCtrlLabel("water",tr("water"));
+  setCtrlLabel("depth",tr("depth"));
+  setCtrlLabel("river",tr("river"));
+  setText("fieldset:nth-of-type(3) legend","A4-PDF");
+  const pdfLabels=document.querySelectorAll("fieldset:nth-of-type(3) .row label");
+  if(pdfLabels[0]) pdfLabels[0].textContent=tr("pageMargin");
+  if(pdfLabels[1]) pdfLabels[1].textContent=tr("overlap");
+  setCheckboxLabel("pageGuides",tr("pageGuides"));
+  setText("fieldset:nth-of-type(4) legend",tr("display"));
+  setCheckboxLabel("bw",tr("bw"));
+  setCtrlLabel("gridWidth",tr("gridWidth"));
+  setCheckboxLabel("coords",tr("coords"));
+  setCheckboxLabel("hexNumbers",tr("hexNumbers"));
+  setCtrlLabel("numberFont",tr("numberFont"));
+  setCheckboxLabel("grid",tr("grid"));
+  setCheckboxLabel("levelEveryHex",tr("levelEveryHex"));
+  setCheckboxLabel("hillShading",tr("hillShading"));
+  setCheckboxLabel("slopeHatching",tr("slopeHatching"));
+  setText("#progress",tr("progress"));
+  const note=document.querySelector("aside > p.small");
+  if(note) note.textContent=tr("footerNote");
+  updateFullSeedDisplay();
+  if(currentModel) updatePageInfo(currentModel);
+}
+
+const sliderIds=["urban","hills","plateau","forest","forestDensity","rough","roads","hard","buildingHeight","water","depth","river","gridWidth","numberFont"];
+sliderIds.forEach(id=>{
+  const input=$(id), out=$("v"+id[0].toUpperCase()+id.slice(1));
+  if(!input || !out) return;
+  const update=()=>out.textContent=input.value;
+  input.addEventListener("input",update); update();
+});
+// Vollständiger Karten-Code:
+// BASIS-BIOM-Stadt-Berge-Wald-Walddichte-Rough-Straßen-Härte-Gebäudehöhe-Wasser-Wassertiefe-Fluss-Hexlinie-Plateau-Nummernschrift-Breite-Höhe
+// Biome: F=Forest/Wald, I=Ice, V=Volcano, M=Moon
+const BIOME_CODE={forest:"F",ice:"I",volcano:"V",moon:"M",coast:"C"};
+const CODE_BIOME={F:"forest",I:"ice",V:"volcano",M:"moon",C:"coast"};
+
+function baseSeedOnly(){
+  let s=($("seed").value||"WOLFSBAU").trim();
+  // Falls der Nutzer einen bereits vollständigen Code in das Seed-Feld einfügt,
+  // nur den Basisanteil als Basis behalten.
+  const parsed=parseFullSeed(s);
+  if(parsed) return parsed.base;
+  return s || "WOLFSBAU";
+}
+function fullSeedCode(){
+  const vals=[
+    BIOME_CODE[$("biome").value]||"F",
+    $("urban").value,$("hills").value,$("forest").value,$("forestDensity").value,
+    $("rough").value,$("roads").value,$("hard").value,$("buildingHeight").value,$("water").value,$("depth").value,$("river").value,
+    $("gridWidth").value,$("plateau")?$("plateau").value:65,$("numberFont").value,
+    $("cols").value,$("rows").value
+  ];
+  return baseSeedOnly()+"-"+vals.join("-");
+}
+function parseFullSeed(code){
+  // Der Basis-Seed darf Bindestriche enthalten. Deshalb lesen wir von hinten
+  // genau 15 Codebestandteile aus.
+  if(!code) return null;
+  const parts=String(code).trim().split("-");
+  if(parts.length<18) return null;
+  const tail=parts.slice(-17), base=parts.slice(0,-17).join("-");
+  if(!base || !CODE_BIOME[tail[0]]) return null;
+  if(!tail.slice(1).every(v=>/^\d+$/.test(v))) return null;
+  return {base,biome:CODE_BIOME[tail[0]],vals:tail.slice(1).map(Number)};
+}
+function applyFullSeed(code){
+  const p=parseFullSeed(code);
+  if(!p) return false;
+  const ids=["urban","hills","forest","forestDensity","rough","roads","hard","buildingHeight","water","depth","river","gridWidth","plateau","numberFont","cols","rows"];
+  $("seed").value=p.base;
+  $("biome").value=p.biome;
+  ids.forEach((id,i)=>{
+    const el=$(id);
+    if(el && Number.isFinite(p.vals[i])) el.value=p.vals[i];
+  });
+  sliderIds.forEach(id=>{
+    const input=$(id),out=$("v"+id[0].toUpperCase()+id.slice(1));
+    if(input&&out) out.textContent=input.value;
+  });
+  updateFullSeedDisplay();
+  return true;
+}
+function updateFullSeedDisplay(){
+  const fs=fullSeedCode();
+  const el=$("fullSeed"); if(el) el.textContent=fs;
+  const link=$("shareLink");
+  if(link){
+    const url=shareUrl();
+    link.textContent=url;
+    link.href=url;
+  }
+  return fs;
+}
+function shareUrl(){
+  const u=new URL(window.location.href);
+  u.search="";
+  u.hash="";
+  u.searchParams.set("seed",fullSeedCode());
+  u.searchParams.set("lang",currentLang);
+  return u.toString();
+}
+
+
+function xmur3(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^h>>>16)>>>0}}
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
+function rngFromSeed(seed){return mulberry32(xmur3(seed)())}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function lerp(a,b,t){return a+(b-a)*t}
+function smoothstep(t){return t*t*(3-2*t)}
+
+const imgs={};
+["trees"].forEach(n=>{imgs[n]=new Image();imgs[n].src="assets/"+n+".png"});
+
+function latticeRand(ix,iy,seed){
+  return rngFromSeed(seed+"|"+ix+"|"+iy)();
+}
+function valueNoise(x,y,seed){
+  const x0=Math.floor(x),y0=Math.floor(y),tx=smoothstep(x-x0),ty=smoothstep(y-y0);
+  const a=latticeRand(x0,y0,seed),b=latticeRand(x0+1,y0,seed),c=latticeRand(x0,y0+1,seed),d=latticeRand(x0+1,y0+1,seed);
+  return lerp(lerp(a,b,tx),lerp(c,d,tx),ty);
+}
+function terrainNoise(q,r,seed){
+  return valueNoise(q/2.7,r/2.7,seed)*0.58 + valueNoise(q/6.5,r/6.5,seed+"L")*0.42;
+}
+function cellCenter(col,row){
+  return {
+    x:HEX_FLAT/2 + col*HEX_FLAT + (row&1)*HEX_FLAT/2,
+    y:HEX_POINT/2 + row*ROW_STEP
+  };
+}
+function hexCornersMM(cx,cy){
+  return [
+    [cx,cy-HEX_POINT/2],
+    [cx+HEX_FLAT/2,cy-HEX_POINT/4],
+    [cx+HEX_FLAT/2,cy+HEX_POINT/4],
+    [cx,cy+HEX_POINT/2],
+    [cx-HEX_FLAT/2,cy+HEX_POINT/4],
+    [cx-HEX_FLAT/2,cy-HEX_POINT/4]
+  ];
+}
+function mapSize(cols,rows){
+  return {w:cols*HEX_FLAT + (rows>1?HEX_FLAT/2:0), h:HEX_POINT+(rows-1)*ROW_STEP};
+}
+function key(c,r){return c+","+r}
+function neighborCoord(col,row,side){
+  // Muss exakt zur Seitenreihenfolge von hexCornersMM()/sideMid passen:
+  // 0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW.
+  // Ungerade Zeilen liegen um eine halbe Hexbreite weiter rechts.
+  const odd=row&1;
+  const dirs = odd
+    ? [[1,-1],[1,0],[1,1],[0,1],[-1,0],[0,-1]]
+    : [[0,-1],[1,0],[0,1],[-1,1],[-1,0],[-1,-1]];
+  const d=dirs[side];
+  return [col+d[0],row+d[1]];
+}
+
+function buildModel(){
+  const cols=clamp(parseInt($("cols").value)||18,8,40);
+  const rows=clamp(parseInt($("rows").value)||24,8,50);
+  const seed=fullSeedCode();
+  const biome=$("biome").value;
+  const urban=+$("urban").value/100,hills=+$("hills").value/100,forest=+$("forest").value/100,forestDensity=+$("forestDensity").value/100,rough=+$("rough").value/100,roads=+$("roads").value/100,hard=+$("hard").value/100,buildingHeightSetting=+$("buildingHeight").value/100,water=+$("water").value/100,depth=+$("depth").value/100,river=+$("river").value/100;
+  const size=mapSize(cols,rows), cells=[], byKey=new Map();
+
+  const maxLevel = biome==="volcano" ? 3+Math.round(hills*6) : (biome==="moon" ? 2+Math.round(hills*5) : 1+Math.round(hills*4));
+  const hillThreshold=lerp(0.78,0.43,hills);
+  const waterThreshold=lerp(0.93,0.48,water);
+  const urbanThreshold=lerp(0.92,0.42,urban);
+  const forestThreshold=lerp(0.92,0.44,forest);
+  const roughThreshold=lerp(0.94,0.50,rough);
+
+  for(let row=0;row<rows;row++){
+    for(let col=0;col<cols;col++){
+      const pos=cellCenter(col,row);
+      // axial-ish coordinates are only used as smooth-noise inputs
+      const q=col-(row-(row&1))/2, r=row;
+      const e=terrainNoise(q,r,seed+"|elev");
+      const wn=terrainNoise(q,r,seed+"|water");
+      const un=terrainNoise(q,r,seed+"|urban");
+      const fn=terrainNoise(q,r,seed+"|forest");
+      const rn=terrainNoise(q,r,seed+"|rough");
+      const craterN=terrainNoise(q,r,seed+"|crater");
+      const volcanoN=terrainNoise(q,r,seed+"|volcanoCone");
+
+      let level=0;
+      if(e>hillThreshold){
+        const t=clamp((e-hillThreshold)/(1-hillThreshold),0,1);
+        const plateau=$("plateau") ? +$("plateau").value/100 : 0.65;
+        let shaped=Math.pow(t, lerp(0.78,1.55,plateau));
+
+        if(biome==="volcano"){
+          // stärkere Anstiege, größere Levelsprünge und markanter Kegel
+          shaped=Math.pow(t,0.62);
+          level=1+Math.min(maxLevel-1,Math.floor(shaped*maxLevel));
+          if(volcanoN>0.72){
+            level += 1 + Math.floor((volcanoN-0.72)/0.08);
+          }
+          level=Math.min(maxLevel+2,level);
+        }else{
+          level=1+Math.min(maxLevel-1,Math.floor(shaped*maxLevel));
+        }
+      }
+
+      // Vertiefungen/Depressionen in stark bergigen Gebieten:
+      // als negative Level in höherem Gelände bzw. Krater.
+      let depression=0;
+      if(hills>0.55 && level>0){
+        const dN=terrainNoise(q,r,seed+"|depression");
+        if(dN>0.82) depression=1;
+        if(dN>0.91) depression=2;
+      }
+      if(biome==="moon"){
+        // Mond: häufige Einschlagkrater, auch im Flachland
+        if(craterN>0.76) depression=Math.max(depression,1);
+        if(craterN>0.88) depression=Math.max(depression,2);
+      }
+
+      const noForest = biome==="volcano" || biome==="moon";
+      const isWater=(biome!=="moon" && biome!=="volcano") && wn>waterThreshold && level===0;
+      const isUrban=!isWater && un>urbanThreshold;
+      const isForest=!noForest && !isWater && !isUrban && fn>forestThreshold;
+      const isRough=!isWater && !isUrban && rn>roughThreshold;
+
+      let waterDepth=0;
+      if(isWater){
+        const dn=terrainNoise(q,r,seed+"|waterdepth");
+        const maxDepth=1+Math.round(depth*4);
+        waterDepth=1+Math.min(maxDepth-1,Math.floor(dn*maxDepth));
+      }
+
+      let forestClass=0;
+      if(isForest){
+        const densityNoise=terrainNoise(q,r,seed+"|forestdensity");
+        const d=clamp(forestDensity*0.75 + densityNoise*0.45,0,1);
+        forestClass=d<0.38?1:(d<0.70?2:3);
+      }
+      const c={col,row,q,r,cx:pos.x,cy:pos.y,level,depression,water:isWater,urban:isUrban,forest:isForest,forestClass,rough:isRough,waterDepth,road:false,roadDirs:[],river:false,riverDirs:[],bridge:false};
+      cells.push(c);byKey.set(key(col,row),c);
+    }
+  }
+
+
+  // Küsten-Biom: eine zusammenhängende Meerseite erzwingen.
+  if(biome==="coast"){
+    const sideRand=rngFromSeed(seed+"|coastside");
+    const side=Math.floor(sideRand()*4); // 0 links,1 rechts,2 oben,3 unten
+    const coastWidth=0.18 + water*0.34;
+    for(const c of cells){
+      let edgeFactor=0;
+      if(side===0) edgeFactor=1-c.col/Math.max(1,cols-1);
+      if(side===1) edgeFactor=c.col/Math.max(1,cols-1);
+      if(side===2) edgeFactor=1-c.row/Math.max(1,rows-1);
+      if(side===3) edgeFactor=c.row/Math.max(1,rows-1);
+      const wobble=terrainNoise(c.q,c.r,seed+"|coastshape")*.18;
+      if(edgeFactor + wobble > 1-coastWidth){
+        c.water=true;c.waterDepth=Math.max(1,c.waterDepth||1);
+        c.urban=false;c.forest=false;c.rough=false;
+      }
+    }
+  }
+
+  // Straßen: wenige klare, zusammenhängende Linien statt Straßen-Konglomeraten.
+  function oppositeSide(s){ return (s+3)%6; }
+  function addRoadConnection(a,b){
+    let sideAB=-1;
+    for(let s=0;s<6;s++){
+      const [nc,nr]=neighborCoord(a.col,a.row,s);
+      if(nc===b.col && nr===b.row){sideAB=s;break}
+    }
+    if(sideAB<0)return;
+    a.road=true;b.road=true;
+    if(!a.roadDirs.includes(sideAB))a.roadDirs.push(sideAB);
+    const back=oppositeSide(sideAB);
+    if(!b.roadDirs.includes(back))b.roadDirs.push(back);
+  }
+  function cellDistance(a,b){return Math.hypot(a.cx-b.cx,a.cy-b.cy)}
+  function findRoadPath(start,goal,label,urbanOnly=false){
+    if(start===goal)return [start];
+    const open=[start],openSet=new Set([key(start.col,start.row)]),came=new Map(),g=new Map([[key(start.col,start.row),0]]);
+    let guard=0;
+    while(open.length && guard++<cols*rows*20){
+      let bestI=0,bestF=Infinity;
+      for(let i=0;i<open.length;i++){
+        const c=open[i],ck=key(c.col,c.row),f=(g.get(ck)||0)+cellDistance(c,goal)/HEX_FLAT;
+        if(f<bestF){bestF=f;bestI=i}
+      }
+      const cur=open.splice(bestI,1)[0],ck=key(cur.col,cur.row);openSet.delete(ck);
+      if(cur===goal){
+        const path=[cur];let k=ck;
+        while(came.has(k)){
+          const prev=came.get(k);path.push(prev);k=key(prev.col,prev.row);
+        }
+        return path.reverse();
+      }
+      for(let s=0;s<6;s++){
+        const [nc,nr]=neighborCoord(cur.col,cur.row,s),n=byKey.get(key(nc,nr));
+        if(!n)continue;
+        if(urbanOnly && !n.urban && n!==goal)continue;
+        if(n.water && !n.river)continue;
+        const nk=key(n.col,n.row);
+        // Straßen dürfen Berge queren. Wald/Rough kosten nur etwas mehr.
+        let step=1 + (n.forest?.35:0) + (n.rough?.18:0) + Math.abs((n.level||0)-(cur.level||0))*.08;
+        if(n.road)step*=.72;
+        const jitter=rngFromSeed(seed+'|roadAstar|'+label+'|'+n.col+'|'+n.row)()*.18;
+        const ng=(g.get(ck)||0)+step+jitter;
+        if(!g.has(nk)||ng<g.get(nk)){
+          came.set(nk,cur);g.set(nk,ng);
+          if(!openSet.has(nk)){open.push(n);openSet.add(nk)}
+        }
+      }
+    }
+    return [];
+  }
+  function applyRoadPath(path){
+    if(!path.length)return;
+    path[0].road=true;
+    for(let i=0;i<path.length-1;i++)addRoadConnection(path[i],path[i+1]);
+  }
+
+  const urbanCells=cells.filter(c=>c.urban&&!c.water);
+  const roadSeen=new Set(),roadClusters=[];
+  for(const start of urbanCells){
+    const sk=key(start.col,start.row);if(roadSeen.has(sk))continue;
+    const q=[start],cl=[];roadSeen.add(sk);
+    while(q.length){
+      const c=q.shift();cl.push(c);
+      for(let s=0;s<6;s++){
+        const [nc,nr]=neighborCoord(c.col,c.row,s),n=byKey.get(key(nc,nr)),nk=key(nc,nr);
+        if(n&&n.urban&&!n.water&&!roadSeen.has(nk)){roadSeen.add(nk);q.push(n)}
+      }
+    }
+    const ax=cl.reduce((a,c)=>a+c.cx,0)/cl.length,ay=cl.reduce((a,c)=>a+c.cy,0)/cl.length;
+    let center=cl[0],bd=Infinity;
+    for(const c of cl){const d=(c.cx-ax)**2+(c.cy-ay)**2;if(d<bd){bd=d;center=c}}
+    roadClusters.push({cells:cl,center});
+  }
+
+  // Pro Stadtgebiet zunächst genau eine Hauptstraße (Spine) durch das Gebiet.
+  if(roads>.05){
+    for(let ci=0;ci<roadClusters.length;ci++){
+      const cl=roadClusters[ci];
+      if(cl.cells.length<2)continue;
+      let a=cl.center;
+      for(const c of cl.cells)if(cellDistance(c,cl.center)>cellDistance(a,cl.center))a=c;
+      let b=a;
+      for(const c of cl.cells)if(cellDistance(c,a)>cellDistance(b,a))b=c;
+      applyRoadPath(findRoadPath(a,b,'spine-'+ci,true));
+
+      // Mit höherem Straßenwert wenige Seitenäste, niemals ein flächiges Netz.
+      const branches=roads>.78?2:(roads>.38?1:0);
+      for(let br=0;br<branches;br++){
+        const roadCells=cl.cells.filter(c=>c.road);
+        if(!roadCells.length)break;
+        let target=null,td=-1;
+        for(const c of cl.cells){
+          if(c.road)continue;
+          const d=Math.min(...roadCells.map(r=>cellDistance(c,r)));
+          if(d>td){td=d;target=c}
+        }
+        if(!target||td<HEX_FLAT*1.6)continue;
+        let startRoad=roadCells[0],sd=Infinity;
+        for(const r of roadCells){const d=cellDistance(r,target);if(d<sd){sd=d;startRoad=r}}
+        const p=findRoadPath(startRoad,target,'branch-'+ci+'-'+br,true);
+        // Nur sinnvolle Äste, keine Minischleifen.
+        if(p.length>=3)applyRoadPath(p);
+      }
+    }
+  }
+
+  // Über 50: Stadtgebiete als schleifenfreier Minimalbaum miteinander verbinden.
+  if(roads>.5&&roadClusters.length>1){
+    const inTree=new Set([0]);
+    while(inTree.size<roadClusters.length){
+      let best=null,bd=Infinity;
+      for(const i of inTree){
+        for(let j=0;j<roadClusters.length;j++){
+          if(inTree.has(j))continue;
+          const d=cellDistance(roadClusters[i].center,roadClusters[j].center);
+          if(d<bd){bd=d;best=[i,j]}
+        }
+      }
+      if(!best)break;
+      const [i,j]=best,rr=rngFromSeed(seed+'|intercity|'+i+'|'+j);
+      if(rr()<.42+(roads-.5)*1.12){
+        const p=findRoadPath(roadClusters[i].center,roadClusters[j].center,'inter-'+i+'-'+j,false);
+        applyRoadPath(p);
+      }
+      inTree.add(j);
+    }
+  }
+
+  // Häuser stehen nicht auf Straßenhexen.
+  for(const c of cells){
+    if(c.road) c.urban=false;
+  }
+
+  // Flussläufe: bei Wert 1 keine Flüsse; mit steigendem Regler mehr 1-Hex-breite Läufe.
+  function edgeCellsForRiver(which){
+    if(which===0) return cells.filter(c=>c.col===0);
+    if(which===1) return cells.filter(c=>c.col===cols-1);
+    if(which===2) return cells.filter(c=>c.row===0);
+    return cells.filter(c=>c.row===rows-1);
+  }
+  function addRiverConnection(a,b){
+    let sideAB=-1;
+    for(let s=0;s<6;s++){
+      const [nc,nr]=neighborCoord(a.col,a.row,s);
+      if(nc===b.col && nr===b.row){ sideAB=s; break; }
+    }
+    if(sideAB<0) return;
+    a.river=true; b.river=true;
+    if(!a.riverDirs.includes(sideAB)) a.riverDirs.push(sideAB);
+    const back=oppositeSide(sideAB);
+    if(!b.riverDirs.includes(back)) b.riverDirs.push(back);
+  }
+
+  function markRiverPath(a,b,label){
+    let cur=a,guard=0,prev=null;
+    while(cur && guard++<cols*rows*3){
+      cur.river=true;
+      cur.water=true;
+      cur.waterDepth=1;
+      if(cur.road) cur.bridge=true;
+      cur.urban=false;cur.forest=false;cur.rough=false;
+
+      if(prev) addRiverConnection(prev,cur);
+      if(cur===b) break;
+
+      let best=null,bestScore=1e99;
+      for(let s=0;s<6;s++){
+        const [nc,nr]=neighborCoord(cur.col,cur.row,s),n=byKey.get(key(nc,nr));
+        if(!n || n===prev) continue;
+        // Flüsse bevorzugen niedrigere Level, dürfen aber durch Berge laufen.
+        const d=(n.cx-b.cx)**2+(n.cy-b.cy)**2;
+        const elevPenalty=Math.max(0,n.level)*HEX_FLAT*HEX_FLAT*.9;
+        const jitter=rngFromSeed(seed+"|riverstep|"+label+"|"+n.col+"|"+n.row)()*HEX_FLAT*HEX_FLAT*2.4;
+        const score=d+elevPenalty+jitter;
+        if(score<bestScore){bestScore=score;best=n}
+      }
+      if(!best || best===cur) break;
+      prev=cur;
+      cur=best;
+    }
+  }
+
+  if(river>0.01){
+    const count=Math.floor((river-0.01)*5.2); // bis etwa 5 Flüsse
+    for(let i=0;i<count;i++){
+      const rr=rngFromSeed(seed+"|river|"+i);
+      const sideA=Math.floor(rr()*4);
+      let sideB=(sideA+2)%4;
+      if(rr()<.35) sideB=(sideA+(rr()<.5?1:3))%4;
+      const A=edgeCellsForRiver(sideA),B=edgeCellsForRiver(sideB);
+      if(A.length && B.length){
+        const a=A[Math.floor(rr()*A.length)],b=B[Math.floor(rr()*B.length)];
+        markRiverPath(a,b,"R"+i);
+      }
+    }
+  }
+
+  // Straßen-Topologie FINAL:
+  // Jede Verbindung ist eine gemeinsame Kante zwischen genau zwei Nachbarhexen.
+  // Wenn A auf Seite s mit B verbunden ist, bekommt B IM SELBEN SCHRITT die
+  // Gegenrichtung (s+3)%6. Ein halbseitiges Band ist damit unmöglich.
+  function roadNeighbors(c){
+    const out=[];
+    for(let s=0;s<6;s++){
+      const [nc,nr]=neighborCoord(c.col,c.row,s),n=byKey.get(key(nc,nr));
+      if(n && n.road) out.push({cell:n,side:s});
+    }
+    return out;
+  }
+
+  // Isolierte Straßenhexe entfernen.
+  for(let pass=0;pass<4;pass++){
+    let changed=false;
+    for(const c of cells){
+      if(!c.road) continue;
+      if(roadNeighbors(c).length===0){
+        c.road=false;
+        c.roadDirs=[];
+        c.bridge=false;
+        changed=true;
+      }
+    }
+    if(!changed) break;
+  }
+
+  // Alle Richtungen neu aufbauen.
+  for(const c of cells) c.roadDirs=[];
+
+  // Jede gemeinsame Kante nur einmal behandeln: Seiten 0,1,2.
+  for(const a of cells){
+    if(!a.road) continue;
+    for(const s of [0,1,2]){
+      const [nc,nr]=neighborCoord(a.col,a.row,s),b=byKey.get(key(nc,nr));
+      if(!b || !b.road) continue;
+
+      // Normale Straße darf nicht über Wasser gehen.
+      if((a.water && !a.bridge) || (b.water && !b.bridge)) continue;
+
+      if(!a.roadDirs.includes(s)) a.roadDirs.push(s);
+      const back=(s+3)%6;
+      if(!b.roadDirs.includes(back)) b.roadDirs.push(back);
+    }
+  }
+
+  function circularSeparation(a,b){
+    const d=Math.abs(a-b)%6;
+    return Math.min(d,6-d);
+  }
+
+  // Brücken dürfen nicht verzweigen und müssen zwei Anschlüsse besitzen.
+  for(const c of cells){
+    if(!c.bridge) continue;
+
+    c.water=true;
+    c.river=true;
+    c.waterDepth=1;
+
+    const dirs=[...c.roadDirs];
+    if(dirs.length<2){
+      // Ohne zwei Straßenanschlüsse gibt es keine gültige Brücke.
+      c.bridge=false;
+      c.road=false;
+      c.roadDirs=[];
+      continue;
+    }
+
+    // Bei genau zwei Anschlüssen bleiben diese erhalten – auch als Kurve.
+    // Bei mehr als zwei möglichen Anschlüssen wählen wir ein Paar ohne Verzweigung.
+    // Gerade Paare werden leicht bevorzugt, Kurven sind aber ausdrücklich erlaubt.
+    let keep=[dirs[0],dirs[1]],best=-1e9;
+    for(let i=0;i<dirs.length;i++){
+      for(let j=i+1;j<dirs.length;j++){
+        const sep=circularSeparation(dirs[i],dirs[j]); // 1=enge Kurve, 2=weite Kurve, 3=gerade
+        const score=sep + rngFromSeed(seed+"|bridgepair|"+c.col+"|"+c.row+"|"+dirs[i]+"|"+dirs[j])()*.45;
+        if(score>best){best=score;keep=[dirs[i],dirs[j]];}
+      }
+    }
+
+    const keepSet=new Set(keep);
+    for(const s of dirs){
+      if(keepSet.has(s)) continue;
+      const [nc,nr]=neighborCoord(c.col,c.row,s),n=byKey.get(key(nc,nr));
+      if(n){
+        const back=(s+3)%6;
+        n.roadDirs=n.roadDirs.filter(d=>d!==back);
+      }
+    }
+    c.roadDirs=keep;
+  }
+
+  // Normale Straßen auf Wasser entfernen und Gegenanschlüsse synchron löschen.
+  for(const c of cells){
+    if(!(c.road && c.water && !c.bridge)) continue;
+    for(const s of [...c.roadDirs]){
+      const [nc,nr]=neighborCoord(c.col,c.row,s),n=byKey.get(key(nc,nr));
+      if(n){
+        const back=(s+3)%6;
+        n.roadDirs=n.roadDirs.filter(d=>d!==back);
+      }
+    }
+    c.road=false;
+    c.roadDirs=[];
+  }
+
+  // Harter Konsistenzcheck: A->B ist nur gültig, wenn B->A existiert.
+  for(const c of cells){
+    if(!c.road) continue;
+    c.roadDirs=c.roadDirs.filter(s=>{
+      const [nc,nr]=neighborCoord(c.col,c.row,s),n=byKey.get(key(nc,nr));
+      return !!(n && n.road && n.roadDirs.includes((s+3)%6));
+    });
+  }
+
+  // Nach dem Bereinigen entstandene isolierte Straßenhexe ebenfalls entfernen.
+  for(const c of cells){
+    if(c.road && c.roadDirs.length===0){
+      c.road=false;
+      c.bridge=false;
+    }
+  }
+
+  // Zusammenhängende Höhengebiete bekommen nur ein zentrales Level-Label.
+  const seen=new Set(), levelLabels=[];
+  for(const start of cells){
+    if(start.level<=0 || seen.has(key(start.col,start.row))) continue;
+    const queue=[start], region=[];seen.add(key(start.col,start.row));
+    while(queue.length){
+      const c=queue.shift();region.push(c);
+      for(let s=0;s<6;s++){
+        const [nc,nr]=neighborCoord(c.col,c.row,s), n=byKey.get(key(nc,nr));
+        if(n && n.level===c.level && !seen.has(key(nc,nr))){
+          seen.add(key(nc,nr));queue.push(n);
+        }
+      }
+    }
+    const ax=region.reduce((a,c)=>a+c.cx,0)/region.length, ay=region.reduce((a,c)=>a+c.cy,0)/region.length;
+    let best=region[0],bd=Infinity;
+    for(const c of region){const d=(c.cx-ax)**2+(c.cy-ay)**2;if(d<bd){bd=d;best=c}}
+    levelLabels.push({x:best.cx,y:best.cy,level:start.level,size:region.length});
+  }
+
+
+  // Gebäudeplanung: keine Überlappungen, keine "Häusermeere" ohne Straßenerschließung.
+  // Terrain-Zellen nahe einer Straße werden bevorzugt bebaut, sobald der Straßenregler aktiv ist.
+  const roadStarts=cells.filter(c=>c.road);
+  const roadDist=new Map();
+  if(roadStarts.length){
+    const qq=[...roadStarts];for(const c of qq)roadDist.set(key(c.col,c.row),0);
+    let qi=0;
+    while(qi<qq.length){
+      const c=qq[qi++],d=roadDist.get(key(c.col,c.row));
+      if(d>=4)continue;
+      for(let s=0;s<6;s++){
+        const [nc,nr]=neighborCoord(c.col,c.row,s),n=byKey.get(key(nc,nr));if(!n)continue;
+        const nk=key(n.col,n.row);if(!roadDist.has(nk)){roadDist.set(nk,d+1);qq.push(n)}
+      }
+    }
+  }
+  const maxRoadDistance=roads>.72?2:3;
+  const buildable=c=>{
+    if(!c.urban||c.water||c.forest||c.road||c.river)return false;
+    if(roads>.08&&roadStarts.length){const d=roadDist.get(key(c.col,c.row));if(d===undefined||d>maxRoadDistance)return false}
+    return true;
+  };
+  const buildingSpans=[],occupied=new Set(),visualBoxes=[];
+
+  function hardnessClass(local){
+    const x=hard*100;
+    const wL=.14+Math.exp(-(((x-18)/28)**2))*1.18;
+    const wM=.14+Math.exp(-(((x-50)/26)**2))*1.18;
+    const wH=.14+Math.exp(-(((x-82)/28)**2))*1.18;
+    const sum=wL+wM+wH,r=local()*sum;
+    return r<wL?'L':(r<wL+wM?'M':'H');
+  }
+  function buildingHeight(local,spanSize){
+    // Neuer Höhenregler:
+    // unten = überwiegend 1–2, Mitte = überwiegend 2–4, oben = häufiger 4–6.
+    // Große Gebäude bekommen nur einen kleinen Bonus, damit Stadtanteil nicht
+    // automatisch Monstergebäude produziert.
+    const h=buildingHeightSetting;
+    const r=(local()+local()+local())/3; // Extreme seltener
+    const center=1 + h*4.4;              // 1 .. ca. 5.4
+    const spread=.75 + h*.95;
+    let lvl=Math.round(center + (r-.5)*spread*2 + Math.max(0,spanSize-1)*.12);
+    return clamp(lvl,1,6);
+  }
+  const ISO_LEVEL_MM=1.85;
+  function visualBoxFor(members,level,shape){
+    const xs=members.map(c=>c.cx),ys=members.map(c=>c.cy);
+    const cx=xs.reduce((a,v)=>a+v,0)/xs.length,cy=ys.reduce((a,v)=>a+v,0)/ys.length;
+    let minx=Math.min(...xs)-HEX_FLAT*.30,maxx=Math.max(...xs)+HEX_FLAT*.30;
+    let miny=Math.min(...ys)-HEX_POINT*.23,maxy=Math.max(...ys)+HEX_POINT*.23;
+    if(members.length===1&&shape==='rect'){
+      minx=cx-HEX_FLAT*.29;maxx=cx+HEX_FLAT*.29;miny=cy-HEX_POINT*.22;maxy=cy+HEX_POINT*.22;
+    }
+    const h=level*ISO_LEVEL_MM,dx=h*.52,dy=h;
+    return {minx:minx-dx-.7,maxx:maxx+.7,miny:miny-dy-.7,maxy:maxy+.7};
+  }
+  function boxesOverlap(a,b){return !(a.maxx<=b.minx||a.minx>=b.maxx||a.maxy<=b.miny||a.miny>=b.maxy)}
+
+  const bSeen=new Set(),buildClusters=[];
+  for(const start of cells){
+    if(!buildable(start)||bSeen.has(key(start.col,start.row)))continue;
+    const q=[start],cl=[];bSeen.add(key(start.col,start.row));
+    while(q.length){
+      const c=q.shift();cl.push(c);
+      for(let s=0;s<6;s++){
+        const [nc,nr]=neighborCoord(c.col,c.row,s),n=byKey.get(key(nc,nr)),nk=key(nc,nr);
+        if(n&&buildable(n)&&!bSeen.has(nk)){bSeen.add(nk);q.push(n)}
+      }
+    }
+    buildClusters.push(cl);
+  }
+
+  const maxSpan=urban>.90?4:(urban>.66?3:(urban>.40?2:1));
+  for(let ci=0;ci<buildClusters.length;ci++){
+    const cluster=buildClusters[ci];
+    const order=[...cluster].sort((a,b)=>rngFromSeed(seed+'|ord|'+ci+'|'+a.col+'|'+a.row)()-rngFromSeed(seed+'|ord|'+ci+'|'+b.col+'|'+b.row)());
+    for(const start of order){
+      if(occupied.has(key(start.col,start.row)))continue;
+      const local=rngFromSeed(seed+'|building|'+start.col+'|'+start.row);
+      // Bei aktivem Straßennetz nicht jedes mögliche Grundstück bebauen.
+      const buildChance=(roads>.08?(.28+urban*.50):(.36+urban*.56));
+      if(local()>buildChance)continue;
+      let wanted=1;
+      if(maxSpan>=2&&local()<urban*.64)wanted=2;
+      if(maxSpan>=3&&local()<urban*.42)wanted=3;
+      if(maxSpan>=4&&local()<urban*.20)wanted=4;
+      const members=[start],reserved=[start];
+      occupied.add(key(start.col,start.row));
+      let direction=Math.floor(local()*6),cur=start;
+      for(let n=1;n<wanted;n++){
+        const preferred=[direction,(direction+1)%6,(direction+5)%6],cands=[];
+        for(const s of preferred){
+          const [nc,nr]=neighborCoord(cur.col,cur.row,s),c=byKey.get(key(nc,nr));
+          if(c&&buildable(c)&&!occupied.has(key(c.col,c.row)))cands.push({c,s})
+        }
+        if(!cands.length)break;
+        const pick=cands[Math.floor(local()*cands.length)];members.push(pick.c);reserved.push(pick.c);occupied.add(key(pick.c.col,pick.c.row));cur=pick.c;direction=pick.s;
+      }
+      const cls=hardnessClass(local),level=buildingHeight(local,members.length),shape=local()<.28?'polygon':'rect';
+      const box=visualBoxFor(members,level,shape);
+      if(visualBoxes.some(b=>boxesOverlap(box,b))){for(const c of reserved)occupied.delete(key(c.col,c.row));continue}
+      visualBoxes.push(box);
+      for(const c of members)c.building=true;
+      buildingSpans.push({members,cls,level,shape});
+    }
+  }
+
+  return {cols,rows,seed,biome,urban,hills,forest,forestDensity,rough,roads,hard,buildingHeight:buildingHeightSetting,water,depth,river,size,cells,byKey,levelLabels,buildingSpans};
+}
+
+function drawPoly(ctx,pts,fill,stroke,lw){
+  ctx.beginPath();
+  pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
+  ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill()}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke()}
+}
+function transformedCorners(c,scale,ox,oy){
+  return hexCornersMM(c.cx,c.cy).map(([x,y])=>[(x+ox)*scale,(y+oy)*scale]);
+}
+function drawImageCentered(ctx,img,x,y,w,h,angle=0){
+  if(!img.complete || !img.naturalWidth)return;
+  const s=Math.min(w/img.naturalWidth,h/img.naturalHeight);
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.drawImage(img,-img.naturalWidth*s/2,-img.naturalHeight*s/2,img.naturalWidth*s,img.naturalHeight*s);ctx.restore();
+}
+function cellVisible(c,vx,vy,vw,vh){
+  return !(c.cx+HEX_FLAT/2<vx || c.cx-HEX_FLAT/2>vx+vw || c.cy+HEX_POINT/2<vy || c.cy-HEX_POINT/2>vy+vh);
+}
+
+function renderMap(ctx,model,scale,oxMM,oyMM,viewport,opts={}){
+  const bw=$("bw").checked;
+  const showGrid=$("grid").checked;
+  const rand=rngFromSeed(model.seed+"|draw");
+  const vis=model.cells.filter(c=>cellVisible(c,viewport.x,viewport.y,viewport.w,viewport.h));
+
+  ctx.save();
+  if(opts.clip){
+    ctx.beginPath();ctx.rect(opts.clip.x,opts.clip.y,opts.clip.w,opts.clip.h);ctx.clip();
+  }
+
+  // Grundflächen
+  for(const c of vis){
+    let fill="#fff";
+    if(c.river){
+      fill=bw?"#d6d6d6":"#d7ebf4";
+    }else if(model.biome==="moon"){
+      fill=c.rough?"#ececec":"#f8f8f8";
+    }else if(model.biome==="volcano"){
+      fill=c.rough?"#e5e5e5":"#f6f6f6";
+    }else if(c.water) fill=bw?"#d7d7d7":"#dceff7";
+    else if(c.level>0 && $("hillShading").checked){
+      const g=clamp(248-c.level*18,155,246);
+      fill=`rgb(${g},${g},${g})`;
+    }
+    else if(c.rough) fill=bw?"#ededed":"#eee9df";
+    else if(c.forest) fill=(model.biome==="ice" ? "#f4f4f4" : (bw?"#fff":"#edf4ea"));
+
+    const gridFactor=+$("gridWidth").value/100;
+    const gridLW=Math.max(.35, scale*(.06 + gridFactor*.28));
+    drawPoly(ctx,transformedCorners(c,scale,oxMM,oyMM),fill,showGrid?"#999":null,gridLW);
+
+    const x=(c.cx+oxMM)*scale,y=(c.cy+oyMM)*scale;
+    if(c.water){
+      ctx.save();
+      ctx.strokeStyle=bw?"#858585":"#659bb5";
+      ctx.lineWidth=Math.max(.5,scale*.11);
+
+      // Wellen statt gerader Striche: drei bis vier kurze Sinuszüge pro Hex.
+      const x0=(c.cx+oxMM)*scale;
+      for(let yy=-HEX_POINT*.27;yy<=HEX_POINT*.27;yy+=5.2){
+        const y0=(c.cy+yy+oyMM)*scale;
+        const half=HEX_FLAT*.33*scale;
+        const amp=1.15*scale;
+        const waves=2.4;
+        ctx.beginPath();
+        const steps=28;
+        for(let i=0;i<=steps;i++){
+          const t=i/steps;
+          const x=x0-half+2*half*t;
+          const y=y0+Math.sin(t*Math.PI*2*waves)*amp;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.fillStyle="#222";
+      ctx.font=`${Math.max(8,3.1*scale)}px system-ui`;
+      ctx.fillText("D"+c.waterDepth,(c.cx+oxMM)*scale-5*scale,(c.cy+oyMM)*scale+1.2*scale);
+    }
+    if(c.depression>0){
+      ctx.save();
+      ctx.strokeStyle="#555";
+      ctx.lineWidth=Math.max(.55,scale*.12);
+      const x=(c.cx+oxMM)*scale,y=(c.cy+oyMM)*scale;
+      for(let i=0;i<c.depression;i++){
+        ctx.beginPath();
+        ctx.ellipse(x,y,HEX_FLAT*.26*scale*(1-i*.12),HEX_POINT*.19*scale*(1-i*.10),0,0,Math.PI*2);
+        ctx.stroke();
+      }
+      ctx.fillStyle="#111";
+      ctx.font=`bold ${Math.max(8,3.0*scale)}px system-ui`;
+      ctx.fillText("T"+c.depression,x-4*scale,y+1*scale);
+      ctx.restore();
+    }
+
+    if(c.rough){
+      ctx.save();ctx.strokeStyle="#666";ctx.lineWidth=Math.max(.5,scale*.1);
+      const local=rngFromSeed(model.seed+"|roughdraw|"+c.col+"|"+c.row);
+      for(let i=0;i<5;i++){
+        const dx=(local()-.5)*HEX_FLAT*.6*scale,dy=(local()-.5)*HEX_POINT*.5*scale;
+        ctx.beginPath();ctx.moveTo(x+dx-2*scale,y+dy+1.5*scale);ctx.lineTo(x+dx,y+dy-2*scale);ctx.lineTo(x+dx+2.5*scale,y+dy+1*scale);ctx.stroke();
+      }ctx.restore();
+    }
+  }
+
+  // Höhenlinien nur an Grenzen verschiedener Level: dadurch entstehen zusammenhängende Höhenflächen.
+  ctx.save();ctx.strokeStyle="#555";ctx.lineCap="round";
+  for(const c of vis){
+    if(c.level<=0)continue;
+    const corners=transformedCorners(c,scale,oxMM,oyMM);
+    for(let side=0;side<6;side++){
+      const [nc,nr]=neighborCoord(c.col,c.row,side),n=model.byKey.get(key(nc,nr));
+      const nl=n?n.level:0;
+      if(nl!==c.level){
+        const a=corners[side],b=corners[(side+1)%6];
+        ctx.lineWidth=Math.max(.75,scale*(.22+.06*Math.abs(c.level-nl)));
+        ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
+      }
+    }
+  }ctx.restore();
+
+  // Straßenband:
+  // A zeichnet vom Mittelpunkt bis zur gemeinsamen Hexkante.
+  // B zeichnet von derselben Hexkante bis zu seinem Mittelpunkt.
+  // roadDirs ist reziprok geprüft, deshalb treffen beide Hälften exakt aufeinander.
+  function sideMid(c,side){
+    const pts=hexCornersMM(c.cx,c.cy),a=pts[side],b=pts[(side+1)%6];
+    return [(a[0]+b[0])/2,(a[1]+b[1])/2];
+  }
+
+  for(const c of vis){
+    if(!c.road || !(c.roadDirs||[]).length) continue;
+
+    const cx=(c.cx+oxMM)*scale,cy=(c.cy+oyMM)*scale;
+    ctx.save();
+    ctx.lineCap="butt";
+    ctx.lineJoin="round";
+
+    // Fahrbahn
+    ctx.strokeStyle="#777";
+    ctx.fillStyle="#777";
+    ctx.lineWidth=Math.max(4.4*scale,2.6);
+    for(const side of c.roadDirs){
+      const m=sideMid(c,side);
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.lineTo((m[0]+oxMM)*scale,(m[1]+oyMM)*scale);
+      ctx.stroke();
+    }
+
+    // Nur die tatsächlichen Anschlussarme in der Mitte sauber verbinden.
+    ctx.beginPath();
+    ctx.arc(cx,cy,Math.max(2.2*scale,1.3),0,Math.PI*2);
+    ctx.fill();
+
+    // Dezente Mittellinie
+    ctx.strokeStyle="#aaa";
+    ctx.lineWidth=Math.max(.45,scale*.10);
+    for(const side of c.roadDirs){
+      const m=sideMid(c,side);
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.lineTo((m[0]+oxMM)*scale,(m[1]+oyMM)*scale);
+      ctx.stroke();
+    }
+
+    // Brücke: zwei Anschlüsse, darf gerade sein oder knicken – wie eine Straße.
+    // Der Brückenkörper folgt exakt den beiden Straßenarmen und kann nicht verzweigen.
+    if(c.bridge && c.roadDirs.length===2){
+      const m1=sideMid(c,c.roadDirs[0]),m2=sideMid(c,c.roadDirs[1]);
+      const p1=[(m1[0]+oxMM)*scale,(m1[1]+oyMM)*scale];
+      const p2=[(m2[0]+oxMM)*scale,(m2[1]+oyMM)*scale];
+
+      ctx.save();
+      ctx.strokeStyle="#fafafa";
+      ctx.lineWidth=Math.max(3.6*scale,2.2);
+      ctx.lineCap="butt";
+      ctx.lineJoin="round";
+
+      // Deck von Kante 1 über Mittelpunkt zu Kante 2.
+      ctx.beginPath();
+      ctx.moveTo(p1[0],p1[1]);
+      ctx.lineTo(cx,cy);
+      ctx.lineTo(p2[0],p2[1]);
+      ctx.stroke();
+
+      // Zwei schmale Außenkanten – optisch wie Brückenrand.
+      ctx.strokeStyle="#222";
+      ctx.lineWidth=Math.max(.65,scale*.13);
+      ctx.beginPath();
+      ctx.moveTo(p1[0],p1[1]);
+      ctx.lineTo(cx,cy);
+      ctx.lineTo(p2[0],p2[1]);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // Gebäude komplett neu als einheitliche Vektor-Isometrien.
+  function convexHull(points){
+    const pts=[...points].sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+    if(pts.length<=2) return pts;
+    const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+    const lo=[],up=[];
+    for(const p of pts){while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
+    for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>=2&&cross(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
+    lo.pop();up.pop();return lo.concat(up);
+  }
+  function buildingFootprint(span){
+    const raw=[];
+    for(const c of span.members) for(const p of hexCornersMM(c.cx,c.cy)) raw.push(p);
+    let hull=convexHull(raw);
+    const cx=hull.reduce((a,p)=>a+p[0],0)/hull.length,cy=hull.reduce((a,p)=>a+p[1],0)/hull.length;
+    const shrink=span.members.length===1?.58:.68;
+    hull=hull.map(([x,y])=>[cx+(x-cx)*shrink,cy+(y-cy)*shrink]);
+    if(span.members.length===1 && span.shape==="rect"){
+      const w=HEX_FLAT*.54,h=HEX_POINT*.40;
+      hull=[[cx-w/2,cy-h/2],[cx+w/2,cy-h/2],[cx+w/2,cy+h/2],[cx-w/2,cy+h/2]];
+    }
+    return hull;
+  }
+  function drawBuilding(span){
+    const fp=buildingFootprint(span);
+    if(fp.length<3) return;
+    const avgx=fp.reduce((a,p)=>a+p[0],0)/fp.length,avgy=fp.reduce((a,p)=>a+p[1],0)/fp.length;
+    const ISO_LEVEL_MM=1.85;
+    const heightMM=span.level*ISO_LEVEL_MM;
+    const dx=heightMM*.52,dy=heightMM;
+    const bottom=fp.map(([x,y])=>[(x+oxMM)*scale,(y+oyMM)*scale]);
+    const top=fp.map(([x,y])=>[(x-dx+oxMM)*scale,(y-dy+oyMM)*scale]);
+
+    ctx.save();ctx.lineJoin="round";ctx.strokeStyle="#222";ctx.lineWidth=Math.max(.65,scale*.13);
+    for(let i=0;i<fp.length;i++){
+      const j=(i+1)%fp.length,face=[bottom[i],bottom[j],top[j],top[i]];
+      ctx.beginPath();face.forEach((p,k)=>k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();
+      ctx.fillStyle=(i%2===0)?"#eeeeee":"#dddddd";ctx.fill();ctx.stroke();
+    }
+    ctx.beginPath();top.forEach((p,k)=>k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();
+    ctx.fillStyle="#fff";ctx.fill();ctx.stroke();
+
+    // Exakt ein Stockwerkstrich pro Gebäude-Level; jeder Level hat dieselbe grafische Höhe.
+    ctx.strokeStyle="#888";ctx.lineWidth=Math.max(.35,scale*.07);
+    for(let lv=1;lv<=span.level;lv++){
+      const t=lv/(span.level+1);
+      for(let i=0;i<fp.length;i++){
+        const j=(i+1)%fp.length;
+        const p1=[top[i][0]+(bottom[i][0]-top[i][0])*t,top[i][1]+(bottom[i][1]-top[i][1])*t];
+        const p2=[top[j][0]+(bottom[j][0]-top[j][0])*t,top[j][1]+(bottom[j][1]-top[j][1])*t];
+        // Nur sichtbare Seitenflächen betonen, damit die Grafik ruhig bleibt.
+        if((bottom[i][1]+bottom[j][1])>(top[i][1]+top[j][1])){ctx.beginPath();ctx.moveTo(p1[0],p1[1]);ctx.lineTo(p2[0],p2[1]);ctx.stroke()}
+      }
+    }
+
+    ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.font=`bold ${Math.max(8,3.2*scale)}px system-ui`;
+    ctx.fillText(span.cls+span.level,(avgx-dx*.55+oxMM)*scale,(avgy-dy*.55+oyMM)*scale);
+    ctx.restore();
+  }
+  for(const span of (model.buildingSpans||[])){
+    if(span.members.some(c=>cellVisible(c,viewport.x,viewport.y,viewport.w,viewport.h))) drawBuilding(span);
+  }
+
+  // Wald: W1/W2/W3; pro Dichtestufe ein Baum mehr.
+  for(const c of vis){
+    if(!c.forest || c.road || c.river) continue;
+    const x=(c.cx+oxMM)*scale,y=(c.cy+oyMM)*scale;
+    const cls=c.forestClass||1;
+    ctx.save();
+    if(model.biome==="ice") ctx.globalAlpha=.42;
+
+    const positions = cls===1
+      ? [[0,0]]
+      : (cls===2 ? [[-.13,.08],[.13,-.08]] : [[-.16,.10],[.16,.10],[0,-.16]]);
+    for(const [dx,dy] of positions){
+      drawImageCentered(ctx,imgs.trees,x+dx*HEX_FLAT*scale,y+dy*HEX_POINT*scale,HEX_FLAT*.42*scale,HEX_POINT*.40*scale,0);
+    }
+    ctx.restore();
+
+    ctx.fillStyle="#111";
+    ctx.font=`bold ${Math.max(8,3.0*scale)}px system-ui`;
+    ctx.fillText("W"+cls,x-5*scale,y+HEX_POINT*.30*scale);
+  }
+
+  // Vulkankegel optisch hervorheben.
+  if(model.biome==="volcano"){
+    for(const c of vis){
+      if(c.level<Math.max(4,Math.floor((3+model.hills*6)*.65))) continue;
+      const x=(c.cx+oxMM)*scale,y=(c.cy+oyMM)*scale;
+      ctx.save();
+      ctx.strokeStyle="#444";ctx.lineWidth=Math.max(.7,scale*.16);
+      ctx.beginPath();
+      ctx.moveTo(x-HEX_FLAT*.22*scale,y+HEX_POINT*.18*scale);
+      ctx.lineTo(x,y-HEX_POINT*.28*scale);
+      ctx.lineTo(x+HEX_FLAT*.22*scale,y+HEX_POINT*.18*scale);
+      ctx.closePath();ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(x,y-HEX_POINT*.24*scale,HEX_FLAT*.07*scale,HEX_POINT*.03*scale,0,0,Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Mondkrater grafisch hervorheben.
+  if(model.biome==="moon"){
+    for(const c of vis){
+      if(c.depression<=0) continue;
+      const x=(c.cx+oxMM)*scale,y=(c.cy+oyMM)*scale;
+      ctx.save();
+      ctx.strokeStyle="#777";ctx.lineWidth=Math.max(.7,scale*.13);
+      ctx.beginPath();
+      ctx.ellipse(x,y,HEX_FLAT*.34*scale,HEX_POINT*.24*scale,0,0,Math.PI*2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(x,y,HEX_FLAT*.22*scale,HEX_POINT*.15*scale,0,0,Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Optional: Level in jedem Höhen-Hex. Das ist die eindeutigste Tabletop-Darstellung.
+  if($("levelEveryHex").checked){
+    ctx.save();ctx.fillStyle="#111";ctx.textAlign="center";
+    ctx.font=`bold ${Math.max(8,3.2*scale)}px system-ui`;
+    for(const c of vis){
+      if(c.level>0 && !c.building){
+        ctx.fillText("L"+c.level,(c.cx+oxMM)*scale,(c.cy+oyMM)*scale+1.1*scale);
+      }
+    }
+    ctx.restore();
+  }
+
+  // Ein zentrales Level-Label pro Region nur, wenn nicht bereits jedes Hex beschriftet wird.
+  ctx.fillStyle="#111";ctx.textAlign="center";
+  if(!$("levelEveryHex").checked) for(const l of model.levelLabels){
+    if(l.x<viewport.x-10||l.x>viewport.x+viewport.w+10||l.y<viewport.y-10||l.y>viewport.y+viewport.h+10)continue;
+    ctx.font=`bold ${Math.max(9,3.8*scale)}px system-ui`;
+    ctx.fillText("L"+l.level,(l.x+oxMM)*scale,(l.y+oyMM)*scale+1.5*scale);
+  }
+  ctx.textAlign="start";
+
+  if($("hexNumbers") && $("hexNumbers").checked){
+    ctx.save();
+    ctx.fillStyle="#222";
+    ctx.textAlign="center";
+    const nf=+$("numberFont").value/100;
+    ctx.font=`${Math.max(7, scale*(1.6+nf*3.8))}px system-ui`;
+    for(const c of vis){
+      const number=1000 + c.row*model.cols + c.col;
+      // bewusst leicht oberhalb der Hexmitte, damit Höhen-/Waldlabels Platz behalten
+      ctx.fillText(String(number),(c.cx+oxMM)*scale,(c.cy+oyMM)*scale-HEX_POINT*.29*scale);
+    }
+    ctx.restore();
+  }
+
+  if($("coords").checked){
+    ctx.fillStyle="#444";ctx.textAlign="center";ctx.font=`${Math.max(7,2.4*scale)}px monospace`;
+    for(const c of vis)ctx.fillText(String(c.col+1).padStart(2,"0")+String(c.row+1).padStart(2,"0"),(c.cx+oxMM)*scale,(c.cy+oyMM)*scale+HEX_POINT*.34*scale);
+    ctx.textAlign="start";
+  }
+
+  ctx.restore();
+}
+
+function pageLayout(model){
+  const margin=clamp(parseFloat($("pageMargin").value)||0,0,20);
+  const overlap=clamp(parseFloat($("overlap").value)||0,0,20);
+  const uw=A4_W-2*margin, uh=A4_H-2*margin;
+  const sx=Math.max(20,uw-overlap), sy=Math.max(20,uh-overlap);
+  const nx=model.size.w<=uw?1:1+Math.ceil((model.size.w-uw)/sx);
+  const ny=model.size.h<=uh?1:1+Math.ceil((model.size.h-uh)/sy);
+  return {margin,overlap,uw,uh,sx,sy,nx,ny,total:nx*ny};
+}
+function updatePageInfo(model){
+  const p=pageLayout(model);
+  $("pageInfo").innerHTML=tr("pageInfo")(model,p);
+}
+function renderPreview(){
+  if(!currentModel)return;
+  const canvas=$("map"),ctx=canvas.getContext("2d");
+  const maxPx=1900;
+  const scale=Math.min(3.0,maxPx/Math.max(currentModel.size.w,currentModel.size.h));
+  canvas.width=Math.ceil(currentModel.size.w*scale)+2;
+  canvas.height=Math.ceil(currentModel.size.h*scale)+2;
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+  renderMap(ctx,currentModel,scale,0,0,{x:0,y:0,w:currentModel.size.w,h:currentModel.size.h});
+
+  if($("pageGuides").checked){
+    const p=pageLayout(currentModel);
+    ctx.save();ctx.setLineDash([7,5]);ctx.strokeStyle="#444";ctx.lineWidth=1;ctx.font="bold 13px system-ui";ctx.fillStyle="#333";
+    let page=1;
+    for(let y=0;y<p.ny;y++){
+      for(let x=0;x<p.nx;x++){
+        const ox=x*p.sx,oy=y*p.sy;
+        ctx.strokeRect(ox*scale,oy*scale,p.uw*scale,p.uh*scale);
+        ctx.fillText("A4 "+page,(ox+3)*scale,(oy+6)*scale);
+        page++;
+      }
+    }
+    ctx.restore();
+  }
+  updatePageInfo(currentModel);
+}
+function generate(){
+  try{
+    const eb=$("errorBox"); if(eb) eb.style.display="none";
+    updateFullSeedDisplay();
+    currentModel=buildModel();
+    renderPreview();
+  }catch(err){
+    console.error(err);
+    const eb=$("errorBox");
+    if(eb){eb.style.display="block";eb.textContent=tr("errorPrefix")+err.message;}
+  }
+}
+
+function makePdfBytes(jpegs){
+  const enc=new TextEncoder(),chunks=[],offsets=[0];
+  let length=0;
+  const pushBytes=b=>{chunks.push(b);length+=b.length};
+  const push=s=>pushBytes(enc.encode(s));
+  push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+  const objCount=2+jpegs.length*3;
+  const pageRefs=[];
+  for(let i=0;i<jpegs.length;i++)pageRefs.push((3+i*3)+" 0 R");
+
+  function beginObj(n){offsets[n]=length;push(n+" 0 obj\n")}
+  function endObj(){push("endobj\n")}
+
+  beginObj(1);push("<< /Type /Catalog /Pages 2 0 R >>\n");endObj();
+  beginObj(2);push(`<< /Type /Pages /Count ${jpegs.length} /Kids [${pageRefs.join(" ")}] >>\n`);endObj();
+
+  const pw=595.2756,ph=841.8898;
+  for(let i=0;i<jpegs.length;i++){
+    const pageObj=3+i*3,contentObj=4+i*3,imgObj=5+i*3;
+    const j=jpegs[i];
+    beginObj(pageObj);
+    push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im0 ${imgObj} 0 R >> >> /Contents ${contentObj} 0 R >>\n`);
+    endObj();
+
+    const content=`q\n${pw} 0 0 ${ph} 0 0 cm\n/Im0 Do\nQ\n`;
+    beginObj(contentObj);push(`<< /Length ${enc.encode(content).length} >>\nstream\n${content}endstream\n`);endObj();
+
+    beginObj(imgObj);
+    push(`<< /Type /XObject /Subtype /Image /Width ${j.width} /Height ${j.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${j.bytes.length} >>\nstream\n`);
+    pushBytes(j.bytes);push("\nendstream\n");endObj();
+  }
+  const xref=length;
+  push(`xref\n0 ${objCount+1}\n0000000000 65535 f \n`);
+  for(let i=1;i<=objCount;i++)push(String(offsets[i]).padStart(10,"0")+" 00000 n \n");
+  push(`trailer\n<< /Size ${objCount+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  const out=new Uint8Array(length);let pos=0;
+  for(const c of chunks){out.set(c,pos);pos+=c.length}
+  return out;
+}
+function dataUrlToBytes(url){
+  const bin=atob(url.split(",")[1]),u=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  return u;
+}
+async function exportPdf(){
+  if(!currentModel)generate();
+  const btn=$("pdf"),progress=$("progress");btn.disabled=true;progress.style.display="block";
+  try{
+    const p=pageLayout(currentModel),dpi=200,ppm=dpi/25.4;
+    const pageW=Math.round(A4_W*ppm),pageH=Math.round(A4_H*ppm);
+    const marginPx=p.margin*ppm;
+    const innerX=marginPx,innerY=marginPx,innerW=p.uw*ppm,innerH=p.uh*ppm;
+    const jpegs=[];
+    let pageNo=1;
+    for(let py=0;py<p.ny;py++){
+      for(let px=0;px<p.nx;px++){
+        progress.textContent=tr("progressPage")(pageNo,p.total);
+        await new Promise(r=>setTimeout(r,0));
+        const c=document.createElement("canvas");c.width=pageW;c.height=pageH;
+        const ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pageW,pageH);
+        const originX=px*p.sx,originY=py*p.sy;
+        renderMap(ctx,currentModel,ppm,(p.margin-originX),(p.margin-originY),
+          {x:originX,y:originY,w:p.uw,h:p.uh},
+          {clip:{x:innerX,y:innerY,w:innerW,h:innerH}});
+
+        // Schnitt-/Passmarken und Seiteninfo außerhalb der Kartennutzfläche.
+        ctx.save();ctx.strokeStyle="#555";ctx.lineWidth=1;
+        const m=marginPx,mark=4*ppm;
+        [[m,m,1,1],[pageW-m,m,-1,1],[m,pageH-m,1,-1],[pageW-m,pageH-m,-1,-1]].forEach(([x,y,sx,sy])=>{
+          ctx.beginPath();ctx.moveTo(x-sx*mark,y);ctx.lineTo(x+sx*mark*.35,y);ctx.moveTo(x,y-sy*mark);ctx.lineTo(x,y+sy*mark*.35);ctx.stroke();
+        });
+        ctx.fillStyle="#333";ctx.font=`${Math.round(2.8*ppm)}px system-ui`;
+        ctx.fillText(`Seed ${currentModel.seed}  |  ${tr("page")} ${pageNo}/${p.total}  (${px+1}/${p.nx}, ${py+1}/${p.ny})`,m, pageH-2.3*ppm);
+
+        // unauffällige Seitenzahl genau in der Seitenmitte
+        ctx.save();
+        ctx.globalAlpha=0.16;
+        ctx.fillStyle="#555";
+        ctx.textAlign="center";
+        ctx.textBaseline="middle";
+        ctx.font=`${Math.round(8.0*ppm)}px system-ui`;
+        ctx.fillText(String(pageNo),pageW/2,pageH/2);
+        ctx.restore();
+
+        ctx.restore();
+
+        const url=c.toDataURL("image/jpeg",0.94);
+        jpegs.push({bytes:dataUrlToBytes(url),width:c.width,height:c.height});
+        pageNo++;
+      }
+    }
+    const pdf=makePdfBytes(jpegs),blob=new Blob([pdf],{type:"application/pdf"}),url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`${tr("mapFilePrefix")}-${currentModel.seed}.pdf`;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }finally{
+    btn.disabled=false;progress.style.display="none";progress.textContent=tr("progress");
+  }
+}
+
+$("generate").addEventListener("click",generate);
+$("pdf").addEventListener("click",exportPdf);
+$("newSeed").addEventListener("click",()=>{$("seed").value=Math.random().toString(36).slice(2,10).toUpperCase();updateFullSeedDisplay();generate()});
+$("copySeed").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(fullSeedCode())}catch(e){}});
+$("copyUrl").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(shareUrl())}catch(e){}});
+$("language").addEventListener("change",()=>{
+  applyLanguage($("language").value);
+  try{localStorage.setItem("hexmap-language",currentLang)}catch(e){}
+  if(currentModel) renderPreview();
+});
+["seed","cols","rows","biome","urban","hills","forest","forestDensity","rough","roads","hard","buildingHeight","water","depth","river","gridWidth","plateau","numberFont"].forEach(id=>{
+  const el=$(id);
+  if(!el) return;
+  el.addEventListener("input",()=>{updateFullSeedDisplay();});
+  el.addEventListener("change",()=>{updateFullSeedDisplay();});
+});
+$("numberFont").addEventListener("input",()=>currentModel&&renderPreview());
+$("savePng").addEventListener("click",()=>{if(!currentModel)generate();const a=document.createElement("a");a.download=tr("mapFilePrefix")+"-"+currentModel.seed+".png";a.href=$("map").toDataURL("image/png");a.click()});
+["pageMargin","overlap","pageGuides","bw","coords","grid","levelEveryHex","hillShading"].forEach(id=>$(id).addEventListener("change",()=>currentModel&&renderPreview()));
+window.addEventListener("load",()=>{
+  applyLanguage(preferredLanguage());
+  const urlSeed=new URLSearchParams(window.location.search).get("seed");
+  if(urlSeed) applyFullSeed(urlSeed);
+  else {
+    // Auch ein vollständiger Code, der manuell ins Seed-Feld geschrieben wurde, wird verstanden.
+    const typed=$("seed").value;
+    if(parseFullSeed(typed)) applyFullSeed(typed);
+  }
+  updateFullSeedDisplay();
+  setTimeout(generate,300);
+});
+</script>
+</body>
+</html>
