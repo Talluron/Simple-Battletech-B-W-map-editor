@@ -6,6 +6,12 @@ A standalone browser-based black-and-white hex map editor and generator for prin
 
 The editor runs directly from `index.html`. No web server, build step, package manager, CDN, or internet connection is required.
 
+## Preview
+
+![Interface sample](docs/interface-sample.png)
+
+![Generated hex map sample](docs/hexmap-sample.png)
+
 ## Features
 
 - Deterministic map generation from a seed
