@@ -5,7 +5,7 @@ This product includes software and artwork developed for the Hex Map Generator.
 Modified versions must retain this NOTICE file, where applicable, and modified
 files must carry prominent notices stating that they have been changed.
 
-The PNG assets in assets/ are distributed under the same license only if
-the project owner has the rights to publish and sublicense them. Replace this
-notice with exact third-party attribution before public release if any asset has
-a separate origin or license.
+The PNG assets in assets/ and docs/, plus artwork embedded in index.html, are
+distributed under the same license only if the project owner has the rights to
+publish and sublicense them. Replace this notice with exact third-party
+attribution before public release if any asset has a separate origin or license.

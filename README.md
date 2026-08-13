@@ -26,7 +26,7 @@ The editor runs directly from `index.html`. No web server, build step, package m
 
 Open `index.html` in a modern browser.
 
-Keep the `assets/` folder next to `index.html`; the editor loads local assets with relative paths.
+Runtime assets are embedded in `index.html`, so double-click usage works without any additional local files.
 
 ## Deutsch
 
@@ -48,7 +48,7 @@ Der Editor laeuft direkt aus `index.html`. Es werden kein Webserver, kein Build-
 
 `index.html` in einem modernen Browser oeffnen.
 
-Der Ordner `assets/` muss neben `index.html` bleiben; der Editor laedt lokale Assets ueber relative Pfade.
+Die Laufzeit-Assets sind in `index.html` eingebettet, damit der Doppelklick-Start ohne weitere lokale Dateien funktioniert.
 
 ## License
 
